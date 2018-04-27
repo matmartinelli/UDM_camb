@@ -66,11 +66,13 @@ class CambTest(unittest.TestCase):
         pars.set_cosmology(H0=67.31, ombh2=0.022242, omch2=0.11977, mnu=0.06, omk=0,
                            bbn_predictor=bbn.BBN_table_interpolator())
         self.assertAlmostEqual(pars.YHe, 0.2453469, 5)
+        self.assertAlmostEqual(pars.get_Y_p(), bbn.BBN_table_interpolator().Y_p(0.022242, 0), 5)
 
         # test massive sterile models as in Planck papers
         pars.set_cosmology(H0=68.0, ombh2=0.022305, omch2=0.11873, mnu=0.06, nnu=3.073, omk=0, meffsterile=0.013)
         self.assertAlmostEqual(pars.omegan * (pars.H0 / 100) ** 2, 0.00078, 5)
         self.assertAlmostEqual(pars.YHe, 0.24573, 5)
+        self.assertAlmostEqual(pars.N_eff(), 3.073, 4)
 
         data.calc_background(pars)
         self.assertAlmostEqual(data.get_derived_params()['age'], 13.773, 2)
@@ -140,7 +142,7 @@ class CambTest(unittest.TestCase):
         kh3, z3, pk3 = data.get_matter_power_spectrum(1e-4, 1, 20)
         self.assertAlmostEqual(pk[-1][-3], 51.909, 2)
         self.assertAlmostEqual(pk3[-1][-3], 57.697, 2)
-        self.assertAlmostEqual(pk2[-2][-4], 53.47, 2)
+        self.assertAlmostEqual(pk2[-2][-4], 53.476, 2)
 
         camb.set_feedback_level(0)
 
@@ -151,6 +153,10 @@ class CambTest(unittest.TestCase):
         kh, z, pk = results.get_nonlinear_matter_power_spectrum()
         pk_interp = PKnonlin.P(z, kh)
         self.assertTrue(np.sum((pk / pk_interp - 1) ** 2) < 0.005)
+        PKnonlin2 = results.get_matter_power_interpolator(nonlinear=True, extrap_kmax=500)
+        pk_interp2 = PKnonlin2.P(z, kh)
+        self.assertTrue(np.sum((pk_interp / pk_interp2 - 1) ** 2) < 0.005)
+
         camb.set_halofit_version('mead')
         _, _, pk = results.get_nonlinear_matter_power_spectrum(params=pars, var1='delta_cdm', var2='delta_cdm')
         self.assertAlmostEqual(pk[0][160], 824.6, delta=0.5)

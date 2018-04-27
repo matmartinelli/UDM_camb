@@ -44,7 +44,7 @@ transfer_names = ['k/h', 'delta_cdm', 'delta_baryon', 'delta_photon', 'delta_neu
 evolve_names = transfer_names + ['a', 'etak', 'H', 'growth', 'v_photon', 'pi_photon', \
                                  'E_2', 'v_neutrino', 'T_source', 'E_source', 'lens_potential_source']
 
-background_names = ['x_e', 'opacity', 'visibility', 'cs2b']
+background_names = ['x_e', 'opacity', 'visibility', 'cs2b', 'T_b']
 
 neutrino_hierarchies = ['normal', 'inverted', 'degenerate']
 neutrino_hierarchy_normal = 1
@@ -173,6 +173,7 @@ class TransferParams(CAMB_Structure):
     """
     _fields_ = [
         ("high_precision", c_int),  # logical
+        ("accurate_massive_neutrinos", c_int),  # logical
         ("num_redshifts", c_int),
         ("kmax", c_double),
         ("k_per_logint", c_int),
@@ -335,8 +336,8 @@ class CAMBparams(CAMB_Structure):
 
         if YHe is None:
             # use BBN prediction
-            bbn_predictor = bbn_predictor or bbn.get_default_predictor()
-            YHe = bbn_predictor.Y_He(ombh2, nnu - standard_neutrino_neff)
+            self.bbn_predictor = bbn_predictor or bbn.get_default_predictor()
+            YHe = self.bbn_predictor.Y_He(ombh2, nnu - standard_neutrino_neff)
         self.YHe = YHe
 
         if cosmomc_theta is not None:
@@ -467,7 +468,48 @@ class CAMBparams(CAMB_Structure):
         else:
             return self.Reion.redshift
 
-    def set_matter_power(self, redshifts=[0.], kmax=1.2, k_per_logint=None, nonlinear=None, silent=False):
+    def N_eff(self):
+        """
+        :return: Effective number of degrees of freedom in relativistic species at early times.
+        """
+        return sum(self.nu_mass_degeneracies[:self.nu_mass_eigenstates]) + self.num_nu_massless
+
+    def get_Y_p(self, ombh2=None, delta_neff=None):
+        """
+        Get BBN helium nucleon fraction (NOT the same as the mass fraction Y_He) by intepolation using the
+        :class:`.bbn.BBNPredictor` instance passed to :meth:`.model.CAMBparams.set_cosmology`
+        (or the default one, if `Y_He` has not been set).
+
+        :param ombh2:  Omega_b h^2 (default: value passed to :meth:`.model.CAMBparams.set_cosmology`)
+        :param delta_neff:  additional N_eff relative to standard value (of 3.046) (default: from values passed to :meth:`.model.CAMBparams.set_cosmology`)
+        :return:  Y_p helium nucleon fraction predicted by BBN.
+        """
+        try:
+            ombh2 = ombh2 if ombh2 != None else self.omegab * (self.H0 / 100.) ** 2
+            delta_neff = delta_neff if delta_neff != None else self.N_eff() - 3.046
+            return self.bbn_predictor.Y_p(ombh2, delta_neff)
+        except AttributeError:
+            raise CAMBError('Not able to compute Y_p: not using an interpolation table for BBN abundances.')
+
+    def get_DH(self, ombh2=None, delta_neff=None):
+        """
+        Get deuterium ration D/H by intepolation using the
+        :class:`.bbn.BBNPredictor` instance passed to :meth:`.model.CAMBparams.set_cosmology`
+        (or the default one, if `Y_He` has not been set).
+
+        :param ombh2:  Omega_b h^2 (default: value passed to :meth:`.model.CAMBparams.set_cosmology`)
+        :param delta_neff:  additional N_eff relative to standard value (of 3.046) (default: from values passed to :meth:`.model.CAMBparams.set_cosmology`)
+        :return: BBN helium nucleon fraction D/H
+        """
+        try:
+            ombh2 = ombh2 if ombh2 != None else self.omegab * (self.H0 / 100.) ** 2
+            delta_neff = delta_neff if delta_neff != None else self.N_eff() - 3.046
+            return self.bbn_predictor.DH(ombh2, delta_neff)
+        except AttributeError:
+            raise CAMBError('Not able to compute DH: not using an interpolation table for BBN abundances.')
+
+    def set_matter_power(self, redshifts=[0.], kmax=1.2, k_per_logint=None, nonlinear=None,
+                         accurate_massive_neutrino_transfers=False, silent=False):
         """
         Set parameters for calculating matter power spectra and transfer functions.
 
@@ -475,12 +517,14 @@ class CAMBparams(CAMB_Structure):
         :param kmax: maximum k to calculate
         :param k_per_logint: number of k steps per log k. Set to zero to use default optimized spacing.
         :param nonlinear: if None, uses existing setting, otherwise boolean for whether to use non-linear matter power.
+        :param accurate_massive_neutrino_transfers: if you want the massive neutrino transfers accurately
         :param silent: if True, don't give warnings about sort order
         :return: self
         """
 
         self.WantTransfer = True
         self.Transfer.high_precision = True
+        self.Transfer.accurate_massive_neutrinos = accurate_massive_neutrino_transfers
         self.Transfer.kmax = kmax
         if nonlinear is not None:
             if nonlinear:

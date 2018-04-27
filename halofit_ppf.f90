@@ -73,6 +73,7 @@
         !AM - Added feedback parameters below at fixed fiducial (DMONLY) values
         REAL :: A_baryon=3.13
         REAL :: eta_baryon=0.603
+        REAL :: baryfeedcambhf, barybloatcambhf !SJ !MMmod: KiDS
     END TYPE HM_cosmology
 
     TYPE HM_tables
@@ -477,9 +478,10 @@
         !The first parameter here is 'eta_0' in Mead et al. (2015; arXiv 1505.07833)
         !eta=0.603-0.3*lut%sig8z
         !AM - made baryon feedback parameter obvious
-        eta0=cosm%eta_baryon
+!        eta0=cosm%eta_baryon
         !eta0=0.98-0.12*cosm%A_baryon !This is an (updated) one-parameter relation that could be used
-        eta=eta0-0.3*lut%sig8z
+!        eta=eta0-0.3*lut%sig8z
+        eta=(1.03-0.11*cosm%baryfeedcambhf)-0.3*lut%sig8z !MMmod: KiDS
     END IF
 
     END FUNCTION eta
@@ -518,7 +520,8 @@
         !This is the 'A' halo-concentration parameter in Mead et al. (2015; arXiv 1505.07833)
         !As=3.13
         !AM - added for easy modification of feedback parameter
-        As=cosm%A_baryon
+!        As=cosm%A_baryon
+        As=cosm%baryfeedcambhf !MMmod: KiDS
     END IF
 
     END FUNCTION As
@@ -798,6 +801,9 @@
     cosm%h=CP%H0/100.
     cosm%Tcmb=CP%tcmb
     cosm%Nnu=CP%Num_Nu_massive
+
+    cosm%baryfeedcambhf=CP%baryfeed !SJ !MMmod: KiDS
+    cosm%barybloatcambhf=CP%barybloat !SJ !MMmod: KiDS
 
     !n_s is read in here. The non-linear CAMB module does not work if there is more than
     !one value in this array, so explicitly setting '1' here is fine.

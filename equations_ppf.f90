@@ -41,12 +41,12 @@
     real(dl), parameter :: amin = 1.d-9
     logical :: is_cosmological_constant
     private nde,ddw_ppf,rde,ade,ddrde,amin
-
-    logical, parameter :: debugtrans = .false. !MMmod UDM set to T, if you want the code to print the extra T(k,z)
+    logical, parameter :: debugtrans = .false. !MMmod: UDM
+    logical, parameter :: fuckudm = .true. !MMmod: removes UDM for debug
 
     contains
 
-    !MMmod UDM----------------------
+    !MMmod: UDM----------------------
     subroutine get_udm_trans(CP,k,z,new_trans, test)
     use precision
     use constants
@@ -66,9 +66,23 @@
 
     nu = (CP%omegac+CP%omegab)/CP%omegav
     omegade = CP%omegav!*(CP%H0*1000/c)/Hofz(z)
-
-    fac = (sqrt(CP%c_inf)/((CP%H0*1000/c)*sqrt(omegade)))
-
+    if (debugtrans) then
+       write(*,*) "l'anima de li mejo"
+       write(*,*) 'cinf=',CP%c_inf
+       write(*,*) 'H0=',CP%H0
+       write(*,*) 'c=',c
+       write(*,*) 'omegade=',omegade, CP%omegav
+       write(*,*) 'H0unit=',CP%H0*1000./c
+       write(*,*) 'denominator=', ((CP%H0*1000./c)*dsqrt(omegade))
+       write(*,*) 'mortacci tua'
+    end if
+   
+    if (CP%c_inf.eq.0.d0) then
+       fac = 0.d0
+    else
+       fac = (CP%c_inf/((CP%H0*1000./c)*dsqrt(omegade)))
+    end if
+    write(*,*) sqrt(3.0d0)*const_pi/(18*nu**(1./3.))
     num1 = sqrt(3.0d0)*const_pi/(18*nu**(1./3.))
 
     logterm = (a**2.-a*nu**(1./3.)+nu**(2./3.))/((a+nu**(1./3.))**2.)
@@ -93,7 +107,7 @@
        write(0,*)'omegav=',CP%omegav
        write(0,*)'omegam=',CP%omegac+CP%omegab
        write(0,*)'nu=',nu
-       write(0,*)'cinf^2=',CP%c_inf
+       write(0,*)'cinf=',CP%c_inf
        write(0,*)'transfer=',new_trans
        write(0,*)'-------------------'
     !   stop
@@ -101,7 +115,6 @@
 
     end subroutine get_udm_trans
     !---------------------------
-
 
     subroutine DarkEnergy_ReadParams(Ini)
     use IniFile
@@ -759,6 +772,7 @@
         do nu_i=1, CP%Nu_Mass_eigenstates
             if (EV%high_ktau_neutrino_approx) then
                 EV%lmaxnu_tau(nu_i) = lmaxnu_high_ktau *lAccuracyBoost
+                if (CP%Transfer%accurate_massive_neutrinos) EV%lmaxnu_tau(nu_i) = EV%lmaxnu_tau(nu_i) *3
             else
                 EV%lmaxnu_tau(nu_i) =max(min(nint(0.8_dl*EV%q*nu_tau_nonrelativistic(nu_i)*lAccuracyBoost),EV%lmaxnu),3)
                 !!!Feb13tweak
@@ -1416,15 +1430,13 @@
     real(dl) hdotoh,ppiedot
     integer, intent(in) :: notused_custom_sources !must be zero in _ppf version
     real(dl) opacity, dopacity, ddopacity, visibility, dvisibility, ddvisibility, exptau, lenswindow
-
-    !MMmod UDM
+    !MMmod: UDM
     real(dl) :: new_trans,cappa,z_test
-    integer :: i,test
+    integer i,test
 
-!MMmod UDM
-!DEBUGGING SCRIPT
-!used to print the T(k,z) to file
-if (debugtrans) then
+    !MMmod: UDM-----------------------
+    !DEBUGGING SCRIPT
+    if (debugtrans) then
              open(42,file='test_trans.dat')
              z_test = 0
              do i=1,1001
@@ -1438,7 +1450,7 @@ if (debugtrans) then
                 write(42,*) cappa,new_trans
              end do
              close(42)
-!
+
              open(42,file='test_trans_z.dat')
              cappa = 0.1
              do i=1,1001
@@ -1453,7 +1465,8 @@ if (debugtrans) then
              end do
              close(42)
              stop
-end if
+     end if
+    !---------------------------------
 
 
     call IonizationFunctionsAtTime(tau, opacity, dopacity, ddopacity, &
@@ -1667,16 +1680,18 @@ end if
         if (tau > tau_maxvis .and. CP%tau0-tau > 0.1_dl) then
             !phi_lens = Phi - 1/2 kappa (a/k)^2 sum_i rho_i pi_i
             phi = -(dgrho +3*dgq*adotoa/k)/(k2*EV%Kf(1)*2) - dgpi/k2/2
-
-            !MMmod UDM----------------------
+            !MMmod: UDM----------------------
             if (.not.debugtrans) then
-               call get_udm_trans(CP,k,((1/a)-1.),new_trans)
+               if (.not. fuckudm) then
+                  call get_udm_trans(CP,k,((1/a)-1.),new_trans)
+               else
+                  new_trans = 1.d0
+               end if
             else
                new_trans=1.d0
             end if
-!            !---------------------------
-
-            sources(3) = (-2*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau)))*new_trans !MMmod UDM
+            !--------------------------------
+            sources(3) = -2*phi*f_K(tau-tau_maxvis)/(f_K(CP%tau0-tau_maxvis)*f_K(CP%tau0-tau))*new_trans !MMmod: UDM
             !We include the lensing factor of two here
         else
             sources(3) = 0
@@ -2242,8 +2257,8 @@ end if
     !ppf
     real(dl) Gamma,S_Gamma,ckH,Gammadot,Fa,dgqe,dgrhoe, vT
     real(dl) w_eff, grhoT
-    !MMmod UDM
-    real(dl) cappa,new_trans,z_test
+    !MMmod: UDM
+    real(dl) new_trans
 
     k=EV%k_buf
     k2=EV%k2_buf
@@ -2413,10 +2428,13 @@ end if
     !
     !end if
     !
-
-    !MMmod UDM----------------------
+    !MMmod: UDM-----------------
     if (.not.debugtrans) then
-       call get_udm_trans(CP,k,((1/a)-1.),new_trans)
+       if (.not.fuckudm) then
+          call get_udm_trans(CP,k,((1/a)-1.),new_trans)
+       else
+          new_trans = 1.d0
+       end if
     else
        new_trans=1.d0
     end if
@@ -2424,23 +2442,22 @@ end if
 
     if (associated(EV%OutputTransfer)) then
         EV%OutputTransfer(Transfer_kh) = k/(CP%h0/100._dl)
-        EV%OutputTransfer(Transfer_cdm) = clxc
+        EV%OutputTransfer(Transfer_cdm) = clxc*new_trans !MMmod: UDM
         EV%OutputTransfer(Transfer_b) = clxb
         EV%OutputTransfer(Transfer_g) = clxg
         EV%OutputTransfer(Transfer_r) = clxr
-!end if
         clxnu_all=0
         dgpi  = grhor_t*pir + grhog_t*pig
         if (CP%Num_Nu_Massive /= 0) then
             call MassiveNuVarsOut(EV,ay,ayprime,a, clxnu_all =clxnu_all, dgpi= dgpi)
         end if
         EV%OutputTransfer(Transfer_nu) = clxnu_all
-        EV%OutputTransfer(Transfer_tot) =  dgrho_matter/grho_matter*new_trans!MMmod  UDM
+        EV%OutputTransfer(Transfer_tot) =  (dgrho_matter/grho_matter)*new_trans !MMmod: UDM !includes neutrinos
         EV%OutputTransfer(Transfer_nonu) = (grhob_t*clxb+grhoc_t*clxc)/(grhob_t + grhoc_t)
         EV%OutputTransfer(Transfer_tot_de) =  dgrho/grho_matter
         !Transfer_Weyl is k^2Phi, where Phi is the Weyl potential
-        EV%OutputTransfer(Transfer_Weyl) = (-(dgrho +3*dgq*adotoa/k)/(EV%Kf(1)*2) - dgpi/2)*new_trans!MMmod UDM CHECK THIS PART
-        EV%OutputTransfer(Transfer_Newt_vel_cdm)=  (-k*sigma/adotoa)*new_trans !MMmod UDM CHECK THIS PART
+        EV%OutputTransfer(Transfer_Weyl) = (-(dgrho +3*dgq*adotoa/k)/(EV%Kf(1)*2) - dgpi/2)*new_trans !MMmod: UDM
+        EV%OutputTransfer(Transfer_Newt_vel_cdm)=  (-k*sigma/adotoa)*new_trans !MMmod: UDM
         EV%OutputTransfer(Transfer_Newt_vel_baryon) = -k*(vb + sigma)/adotoa
         EV%OutputTransfer(Transfer_vel_baryon_cdm) = vb
     end if

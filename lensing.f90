@@ -216,7 +216,8 @@
         if (Cphil3(10) > 1e-7) then
             write (*,*) 'You need to normalize realistically to use lensing.'
             write (*,*) 'see http://cosmocoffee.info/viewtopic.php?t=94'
-            call MpiStop()
+            !call MpiStop()
+            return
         end if
         if (lmax > CP%Max_l) then
             l=CP%Max_l
@@ -232,7 +233,8 @@
                 CEE(l) =  highL_CL_template(l, C_E)*fac2 *sc
                 CTE(l) =  highL_CL_template(l, C_Cross)*fac2*sc
                 if (Cphil3(CP%Max_l+1) > 1e-7) then
-                    call MpiStop('You need to normalize the high-L template so it is dimensionless')
+                   ! call MpiStop('You need to normalize the high-L template so it is dimensionless')
+                   return
                 end if
             end do
         end if
@@ -587,7 +589,7 @@
         if (Cphil3(10) > 1e-7) then
             write (*,*) 'You need to normalize realistically to use lensing.'
             write (*,*) 'see http://cosmocoffee.info/viewtopic.php?t=94'
-            stop
+            return!stop
         end if
 
         lens_contrib=0
@@ -757,7 +759,7 @@
     if (RR(1) > 1e-5) then
         write (*,*) 'You need to normalize realistically to use lensing.'
         write (*,*) 'see http://cosmocoffee.info/viewtopic.php?t=94'
-        call MpiStop()
+        return!call MpiStop()
     end if
     if (maxl > lmax_donelnfa) then
         !Get ln factorials
